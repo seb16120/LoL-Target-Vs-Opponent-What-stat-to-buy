@@ -23,9 +23,30 @@ function combinePercentMultiplicative(...values) {
   return 1 - values.map(v => clamp(v, 0, 0.99)).reduce((acc, v) => acc * (1 - v), 1);
 }
 
-function effectiveResist(raw, flatPre, shredPct, penPct, flatPost) {
-  const afterFlatPre = raw - Math.max(0, flatPre);
-  const afterShred = afterFlatPre * (1 - clamp(shredPct, 0, 0.99));
+function splitArmorAfterFlatReduction(totalArmor, naturalArmor, flatReduction) {
+  const afterFlat = totalArmor - Math.max(0, flatReduction);
+  const natural = Math.max(0, Math.min(Math.max(0, naturalArmor), afterFlat));
+  const bonus = Math.max(0, afterFlat - natural);
+  return { afterFlat, natural, bonus };
+}
+
+function effectiveArmor(rawArmor, naturalArmor, flatReduction, shredPct, bonusArmorPenPct, generalPenPct, lethality) {
+  const split = splitArmorAfterFlatReduction(rawArmor, naturalArmor, flatReduction);
+  const shred = 1 - clamp(shredPct, 0, 0.99);
+  const naturalAfterShred = split.natural * shred;
+  const bonusAfterShred = split.bonus * shred;
+
+  // Bonus armor penetration, e.g. Yasuo, affects bonus armor only.
+  const afterBonusArmorPen = naturalAfterShred + bonusAfterShred * (1 - clamp(bonusArmorPenPct, 0, 0.99));
+
+  // General % armor penetration, e.g. LDR, affects remaining armor.
+  const afterGeneralPen = afterBonusArmorPen * (1 - clamp(generalPenPct, 0, 0.99));
+  return afterGeneralPen - Math.max(0, lethality);
+}
+
+function effectiveMR(raw, flatReduction, shredPct, penPct, flatPost) {
+  const afterFlatReduction = raw - Math.max(0, flatReduction);
+  const afterShred = afterFlatReduction * (1 - clamp(shredPct, 0, 0.99));
   const afterPctPen = afterShred * (1 - clamp(penPct, 0, 0.99));
   return afterPctPen - Math.max(0, flatPost);
 }
@@ -45,6 +66,7 @@ function readProfile(overrides = {}) {
   const bonusHp = Math.max(0, overrides.bonusHp ?? n('bonusHp'));
   const totalHp = Math.max(1, baseHp + bonusHp);
   const armor = overrides.armor ?? n('armor');
+  const naturalArmor = Math.max(0, overrides.naturalArmor ?? n('naturalArmor'));
   const mr = overrides.mr ?? n('mr');
 
   const physShare = Math.max(0, n('physShare'));
@@ -55,11 +77,11 @@ function readProfile(overrides = {}) {
   const pMagic = total ? magicShare / total : 0;
   const pTrue = total ? trueShare / total : 0;
 
-  const armorPen = combinePercentMultiplicative(
+  const generalArmorPen = combinePercentMultiplicative(
     pct('armorPenPct'),
-    pct('bonusArmorPenPct'),
     $('ldrEnabled')?.checked ? pct('ldrArmorPenPct') : 0
   );
+  const bonusArmorPen = clamp(pct('bonusArmorPenPct'), 0, 0.99);
   const magicPen = combinePercentMultiplicative(
     pct('magicPenPct'),
     pct('bonusMagicPenPct')
@@ -68,14 +90,16 @@ function readProfile(overrides = {}) {
   const armorShred = clamp(pct('armorShredPct') + pct('bcShredPct'), 0, 0.99);
   const magicShred = clamp(pct('magicShredPct'), 0, 0.99);
 
-  const effArmor = effectiveResist(
+  const effArmor = effectiveArmor(
     armor,
+    naturalArmor,
     n('flatArmorPenPre'),
     armorShred,
-    armorPen,
+    bonusArmorPen,
+    generalArmorPen,
     n('lethality')
   );
-  const effMR = effectiveResist(
+  const effMR = effectiveMR(
     mr,
     n('flatMagicPenPre'),
     magicShred,
@@ -88,8 +112,8 @@ function readProfile(overrides = {}) {
   const magicExtra = pct('magicReduction');
   const ldrAmp = ldrDamageAmp(bonusHp);
 
-  // V0.5: LDR bonus is a physical damage multiplier, not an armor reduction.
-  // Simplified defensive order: Bone Plating placeholder -> Exhaust -> % damage reduction -> resistances -> shield placeholder.
+  // V0.6: damage modifiers multiply separately from resistances.
+  // EHP_phys = TotalHP / (damage_modifiers * armor_damage_multiplier).
   const physicalPreResistMult = ldrAmp * (1 - exhaust) * (1 - physExtra);
   const magicPreResistMult = (1 - exhaust) * (1 - magicExtra);
   const armorTakenMult = dmgMult(effArmor);
@@ -108,10 +132,14 @@ function readProfile(overrides = {}) {
   const totalPhysicalAfterMitigation = physRawDmg * physTaken;
   const totalMagicAfterMitigation = magicRawDmg * magicTaken;
 
+  const armorMarginalScale = (1 - armorShred) * (1 - bonusArmorPen) * (1 - generalArmorPen);
+  const mrMarginalScale = (1 - magicShred) * (1 - magicPen);
+  const bonusArmor = Math.max(0, armor - naturalArmor);
+
   return {
-    hp: baseHp, totalHp, armor, mr, bonusHp,
+    hp: baseHp, totalHp, armor, naturalArmor, bonusArmor, mr, bonusHp,
     pPhys, pMagic, pTrue, total,
-    armorPen, magicPen, armorShred, magicShred,
+    generalArmorPen, bonusArmorPen, magicPen, armorShred, magicShred,
     effArmor, effMR,
     physTaken, magicTaken, trueTaken,
     weighted: safeWeighted,
@@ -129,7 +157,9 @@ function readProfile(overrides = {}) {
     trueRawDmg,
     totalPhysicalRawAfterAmp,
     totalPhysicalAfterMitigation,
-    totalMagicAfterMitigation
+    totalMagicAfterMitigation,
+    armorMarginalScale,
+    mrMarginalScale
   };
 }
 
@@ -149,9 +179,10 @@ function calculate(ev) {
   const armorGold = Math.max(0.0001, n('armorGold'));
   const mrGold = Math.max(0.0001, n('mrGold'));
 
-  // +1 HP is treated as +1 item bonus HP too, because the tool compares bought defensive stats.
+  // +1 HP is treated as +1 bought bonus HP because the tool compares bought defensive stats.
   const hpPlus = readProfile({ hp: base.hp, bonusHp: base.bonusHp + 1 });
-  const armorPlus = readProfile({ armor: base.armor + 1 });
+  // +1 armor is treated as bought bonus armor; naturalArmor stays unchanged.
+  const armorPlus = readProfile({ armor: base.armor + 1, naturalArmor: base.naturalArmor });
   const mrPlus = readProfile({ mr: base.mr + 1 });
 
   const hpGain = hpPlus.ehp - base.ehp;
@@ -195,12 +226,14 @@ function calculate(ev) {
 
   $('effectiveResists').innerHTML =
     `Total HP : <b>${flex(base.totalHp, 0)}</b><br>` +
+    `Armor total : <b>${flex(base.armor, 2)}</b> • Natural armor : <b>${flex(base.naturalArmor, 2)}</b> • Bonus armor : <b>${flex(base.bonusArmor, 2)}</b><br>` +
     `Armor effective : <b>${flex(base.effArmor, 3)}</b> • ` +
     `MR effective : <b>${flex(base.effMR, 3)}</b><br>` +
-    `Armor pen total : <b>${flex(base.armorPen * 100, 2)}%</b> • ` +
+    `General armor pen total : <b>${flex(base.generalArmorPen * 100, 2)}%</b> • ` +
+    `Bonus armor pen : <b>${flex(base.bonusArmorPen * 100, 2)}%</b><br>` +
     `Magic pen total : <b>${flex(base.magicPen * 100, 2)}%</b><br>` +
-    `Armor scale marginal : <b>${flex((1 - base.armorShred) * (1 - base.armorPen), 3)}</b> • ` +
-    `MR scale marginal : <b>${flex((1 - base.magicShred) * (1 - base.magicPen), 3)}</b>`;
+    `Bought armor marginal scale : <b>${flex(base.armorMarginalScale, 3)}</b> • ` +
+    `MR scale marginal : <b>${flex(base.mrMarginalScale, 3)}</b>`;
 
   $('effectiveDamageAmp').innerHTML =
     `LDR physical dmg amp : <b>${flex(base.ldrAmp * 100, 2)}%</b> ` +
@@ -219,7 +252,7 @@ function calculate(ev) {
     `Magic after mitigation : <b>${flex(base.totalMagicAfterMitigation, 2)}</b>`;
 
   if (sumHpPctInputs() > 0) {
-    $('conclusionDetail').textContent += ' Attention : des dégâts %HP sont saisis ; la recommandation V0.5 ne remplace pas encore une simulation temporelle complète.';
+    $('conclusionDetail').textContent += ' Attention : des dégâts %HP sont saisis ; la recommandation V0.6 ne remplace pas encore une simulation temporelle complète.';
   }
 }
 
