@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>LoL Target vs Assaillant — What stat to buy?</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<main class="app">
+  <header class="hero">
+    <div>
+      <p class="eyebrow">League of Legends • Defensive calculator</p>
+      <h1>Target vs Assaillant</h1>
+      <p>Calcule les réductions, EHP, ratios EHP/gold et la meilleure stat défensive marginale à acheter.</p>
+    </div>
+    <div class="version">V0.1</div>
+  </header>
+
+  <section class="layout">
+    <form id="calculator" class="panel inputs" autocomplete="off">
+      <div class="section-title"><h2>Target</h2><p>Stats défensives de la cible.</p></div>
+      <div class="grid three">
+        <label>Health<input id="hp" type="number" value="2000" step="1" min="1"></label>
+        <label>Armor<input id="armor" type="number" value="300" step="1"></label>
+        <label>Magic Resist<input id="mr" type="number" value="20" step="1"></label>
+        <label>Level<input id="level" type="number" value="18" step="1" min="1" max="18"></label>
+        <label>Bonus HP items<input id="bonusHp" type="number" value="0" step="1" min="0"></label>
+        <label>HP gold value<input id="hpGold" type="number" value="2.6666667" step="0.0001" min="0.0001"></label>
+        <label>Armor gold value<input id="armorGold" type="number" value="20" step="0.01" min="0.0001"></label>
+        <label>MR gold value<input id="mrGold" type="number" value="20" step="0.01" min="0.0001"></label>
+        <label>Physical dmg reduction %<input id="physReduction" type="number" value="0" step="1" min="0" max="100"></label>
+        <label>Magic dmg reduction %<input id="magicReduction" type="number" value="0" step="1" min="0" max="100"></label>
+        <label class="toggle-row"><input id="exhausted" type="checkbox"> Ennemi exhausted ?</label>
+        <label>Exhaust reduction %<input id="exhaustReduction" type="number" value="35" step="1" min="0" max="100"></label>
+      </div>
+
+      <div class="section-title assailant-head"><h2>Assaillant</h2><p>Profil offensif appliqué à la cible.</p></div>
+      <div class="grid three">
+        <label>Physical damage %<input id="physShare" type="number" value="100" step="1" min="0"></label>
+        <label>Magic damage %<input id="magicShare" type="number" value="0" step="1" min="0"></label>
+        <label>True damage %<input id="trueShare" type="number" value="0" step="1" min="0"></label>
+        <label>Flat armor pen<input id="flatArmorPen" type="number" value="64" step="1" min="0"></label>
+        <label>Flat magic pen<input id="flatMagicPen" type="number" value="0" step="1" min="0"></label>
+        <label>Armor pen %<input id="armorPenPct" type="number" value="35" step="1" min="0" max="100"></label>
+        <label>Magic pen %<input id="magicPenPct" type="number" value="0" step="1" min="0" max="100"></label>
+        <label>Armor shred %<input id="armorShredPct" type="number" value="0" step="1" min="0" max="100"></label>
+        <label>Magic shred %<input id="magicShredPct" type="number" value="0" step="1" min="0" max="100"></label>
+        <label>Black Cleaver shred %<input id="bcShredPct" type="number" value="0" step="1" min="0" max="30"></label>
+        <label class="toggle-row"><input id="ldrEnabled" type="checkbox"> LDR activé ?</label>
+        <label>LDR armor pen %<input id="ldrArmorPenPct" type="number" value="35" step="1" min="0" max="100"></label>
+      </div>
+
+      <details class="advanced">
+        <summary>Inputs %HP — V0.1 expérimental</summary>
+        <div class="grid three advanced-grid">
+          <label>% HP max physique<input id="maxHpPhys" type="number" value="0" step="0.1" min="0"></label>
+          <label>% HP max magique<input id="maxHpMagic" type="number" value="0" step="0.1" min="0"></label>
+          <label>% HP max brut<input id="maxHpTrue" type="number" value="0" step="0.1" min="0"></label>
+          <label>% HP actuel physique<input id="curHpPhys" type="number" value="0" step="0.1" min="0"></label>
+          <label>% HP actuel magique<input id="curHpMagic" type="number" value="0" step="0.1" min="0"></label>
+          <label>% HP actuel brut<input id="curHpTrue" type="number" value="0" step="0.1" min="0"></label>
+        </div>
+        <p class="note">Ces champs sont intégrés comme avertissement ; la recommandation V0.1 reste centrée sur le profil physique/magique/brut.</p>
+      </details>
+
+      <button type="submit">Calculate defenses</button><span id="damageTotal" class="damage-total">Damage total: 100%</span>
+    </form>
+
+    <section class="results">
+      <div class="card highlight"><span>Effective health</span><strong id="effectiveHealth">—</strong><small>Raw mixed damage absorbable selon le profil donné.</small></div>
+      <div class="cards two"><div class="card"><span>Physical reduction</span><strong id="physicalReduction">—</strong></div><div class="card"><span>Magic reduction</span><strong id="magicReductionOut">—</strong></div></div>
+      <div class="cards two"><div class="card"><span>Target stat gold value</span><strong id="statGoldValue">—</strong></div><div class="card"><span>Effective value</span><strong id="effectiveGoldValue">—</strong></div></div>
+      <div class="card bars"><span>Damage taken after mitigation</span><div class="bar-row"><label>Physical</label><div><i id="physBar"></i></div><b id="physTaken">—</b></div><div class="bar-row"><label>Magical</label><div><i id="magicBar"></i></div><b id="magicTaken">—</b></div><div class="bar-row"><label>True</label><div><i id="trueBar"></i></div><b id="trueTaken">—</b></div></div>
+      <div class="card comparison"><span>Marginal EHP / gold</span><div class="stat-line"><b>+1 HP</b><strong id="hpRatio">—</strong><small id="hpGain">—</small></div><div class="stat-line"><b>+1 Armor</b><strong id="armorRatio">—</strong><small id="armorGain">—</small></div><div class="stat-line"><b>+1 MR</b><strong id="mrRatio">—</strong><small id="mrGain">—</small></div></div>
+      <div class="card conclusion"><span>Conclusion</span><strong id="conclusion">—</strong><small id="conclusionDetail">—</small></div>
+      <div class="card formulae"><span>Effective resistances</span><p id="effectiveResists">—</p><p class="note">Ordre V0.1 : shred % → pen % → pen plate. Lethality = flat armor pen dans ce modèle.</p></div>
+    </section>
+  </section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>
