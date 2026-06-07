@@ -88,14 +88,25 @@ function readProfile(overrides = {}) {
   const magicExtra = pct('magicReduction');
   const ldrAmp = ldrDamageAmp(bonusHp);
 
-  const physicalDefensiveMult = (1 - physExtra) * (1 - exhaust);
-  const magicDefensiveMult = (1 - magicExtra) * (1 - exhaust);
-  const physTaken = dmgMult(effArmor) * physicalDefensiveMult * ldrAmp;
-  const magicTaken = dmgMult(effMR) * magicDefensiveMult;
+  // V0.5: LDR bonus is a physical damage multiplier, not an armor reduction.
+  // Simplified defensive order: Bone Plating placeholder -> Exhaust -> % damage reduction -> resistances -> shield placeholder.
+  const physicalPreResistMult = ldrAmp * (1 - exhaust) * (1 - physExtra);
+  const magicPreResistMult = (1 - exhaust) * (1 - magicExtra);
+  const armorTakenMult = dmgMult(effArmor);
+  const mrTakenMult = dmgMult(effMR);
+  const physTaken = physicalPreResistMult * armorTakenMult;
+  const magicTaken = magicPreResistMult * mrTakenMult;
   const trueTaken = 1;
 
   const weighted = pPhys * physTaken + pMagic * magicTaken + pTrue * trueTaken;
   const safeWeighted = Math.max(0.000001, weighted);
+
+  const physRawDmg = Math.max(0, n('physRawDmg'));
+  const magicRawDmg = Math.max(0, n('magicRawDmg'));
+  const trueRawDmg = Math.max(0, n('trueRawDmg'));
+  const totalPhysicalRawAfterAmp = physRawDmg * ldrAmp;
+  const totalPhysicalAfterMitigation = physRawDmg * physTaken;
+  const totalMagicAfterMitigation = magicRawDmg * magicTaken;
 
   return {
     hp: baseHp, totalHp, armor, mr, bonusHp,
@@ -109,8 +120,16 @@ function readProfile(overrides = {}) {
     magicEhp: totalHp / Math.max(0.000001, magicTaken),
     trueEhp: totalHp,
     ldrAmp,
-    physicalDefensiveMult,
-    magicDefensiveMult
+    physicalPreResistMult,
+    magicPreResistMult,
+    armorTakenMult,
+    mrTakenMult,
+    physRawDmg,
+    magicRawDmg,
+    trueRawDmg,
+    totalPhysicalRawAfterAmp,
+    totalPhysicalAfterMitigation,
+    totalMagicAfterMitigation
   };
 }
 
@@ -175,9 +194,7 @@ function calculate(ev) {
   $('conclusionDetail').textContent = `${best[0][0]} domine en EHP/gold marginal. Écart avec le 2e : ${flex(best[0][1] - best[1][1])} EHP/g.`;
 
   $('effectiveResists').innerHTML =
-    `Total HP : <b>${flex(base.totalHp, 0)}</b> • ` +
-    `Base HP : <b>${flex(base.hp, 0)}</b> • ` +
-    `Bonus HP items : <b>${flex(base.bonusHp, 0)}</b><br>` +
+    `Total HP : <b>${flex(base.totalHp, 0)}</b><br>` +
     `Armor effective : <b>${flex(base.effArmor, 3)}</b> • ` +
     `MR effective : <b>${flex(base.effMR, 3)}</b><br>` +
     `Armor pen total : <b>${flex(base.armorPen * 100, 2)}%</b> • ` +
@@ -186,15 +203,23 @@ function calculate(ev) {
     `MR scale marginal : <b>${flex((1 - base.magicShred) * (1 - base.magicPen), 3)}</b>`;
 
   $('effectiveDamageAmp').innerHTML =
-    `Physical dmg amp : <b>${flex(base.ldrAmp * 100, 2)}%</b> • ` +
-    `LDR bonus : <b>${flex((base.ldrAmp - 1) * 100, 2)}%</b><br>` +
-    `Physical defensive mult : <b>${flex(base.physicalDefensiveMult * 100, 2)}%</b> • ` +
-    `Magic defensive mult : <b>${flex(base.magicDefensiveMult * 100, 2)}%</b><br>` +
+    `LDR physical dmg amp : <b>${flex(base.ldrAmp * 100, 2)}%</b> ` +
+    `(bonus <b>${flex((base.ldrAmp - 1) * 100, 2)}%</b>)<br>` +
+    `Physical raw dmg : <b>${flex(base.physRawDmg, 2)}</b> → ` +
+    `Total physical dmg : <b>${flex(base.totalPhysicalRawAfterAmp, 2)}</b><br>` +
+    `Magic raw dmg : <b>${flex(base.magicRawDmg, 2)}</b> → ` +
+    `Total magic dmg : <b>${flex(base.magicRawDmg, 2)}</b><br>` +
+    `Physical pre-resist mult : <b>${flex(base.physicalPreResistMult * 100, 2)}%</b> • ` +
+    `Magic pre-resist mult : <b>${flex(base.magicPreResistMult * 100, 2)}%</b><br>` +
+    `Armor mitigation mult : <b>${flex(base.armorTakenMult * 100, 2)}%</b> • ` +
+    `MR mitigation mult : <b>${flex(base.mrTakenMult * 100, 2)}%</b><br>` +
     `Final physical taken : <b>${flex(base.physTaken * 100, 2)}%</b> • ` +
-    `Final magic taken : <b>${flex(base.magicTaken * 100, 2)}%</b>`;
+    `Final magic taken : <b>${flex(base.magicTaken * 100, 2)}%</b><br>` +
+    `Physical after mitigation : <b>${flex(base.totalPhysicalAfterMitigation, 2)}</b> • ` +
+    `Magic after mitigation : <b>${flex(base.totalMagicAfterMitigation, 2)}</b>`;
 
   if (sumHpPctInputs() > 0) {
-    $('conclusionDetail').textContent += ' Attention : des dégâts %HP sont saisis ; la recommandation V0.4 ne remplace pas encore une simulation temporelle complète.';
+    $('conclusionDetail').textContent += ' Attention : des dégâts %HP sont saisis ; la recommandation V0.5 ne remplace pas encore une simulation temporelle complète.';
   }
 }
 
