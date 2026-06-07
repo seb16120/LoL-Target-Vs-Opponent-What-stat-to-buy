@@ -34,23 +34,17 @@ function dmgMult(resist) {
   return resist >= 0 ? 100 / (100 + resist) : 2 - (100 / (100 - resist));
 }
 
-function sumHpPctInputs() {
-  return [
-    'maxHpPhys', 'maxHpMagic', 'maxHpTrue',
-    'curHpPhys', 'curHpMagic', 'curHpTrue',
-    'remainingHpPhys', 'remainingHpMagic', 'remainingHpTrue'
-  ].map(n).reduce((a, b) => a + Math.max(0, b), 0);
+function ldrDamageAmp(bonusHp) {
+  if (!$('ldrEnabled')?.checked) return 1;
+  const bonus = clamp(Math.max(0, bonusHp) / 100, 0, 15);
+  return 1 + bonus / 100;
 }
 
-function calculate(ev) {
-  ev?.preventDefault();
-
-  const hp = Math.max(1, n('hp'));
-  const armor = n('armor');
-  const mr = n('mr');
-  const hpGold = Math.max(0.0001, n('hpGold'));
-  const armorGold = Math.max(0.0001, n('armorGold'));
-  const mrGold = Math.max(0.0001, n('mrGold'));
+function readProfile(overrides = {}) {
+  const hp = Math.max(1, overrides.hp ?? n('hp'));
+  const armor = overrides.armor ?? n('armor');
+  const mr = overrides.mr ?? n('mr');
+  const bonusHp = Math.max(0, overrides.bonusHp ?? n('bonusHp'));
 
   const physShare = Math.max(0, n('physShare'));
   const magicShare = Math.max(0, n('magicShare'));
@@ -92,58 +86,75 @@ function calculate(ev) {
   const physExtra = pct('physReduction');
   const magicExtra = pct('magicReduction');
 
-  const physTaken = dmgMult(effArmor) * (1 - physExtra) * (1 - exhaust);
+  const physTaken = dmgMult(effArmor) * (1 - physExtra) * (1 - exhaust) * ldrDamageAmp(bonusHp);
   const magicTaken = dmgMult(effMR) * (1 - magicExtra) * (1 - exhaust);
   const trueTaken = 1;
 
   const weighted = pPhys * physTaken + pMagic * magicTaken + pTrue * trueTaken;
   const safeWeighted = Math.max(0.000001, weighted);
-  const ehp = hp / safeWeighted;
 
-  const hpGain = 1 / safeWeighted;
+  return {
+    hp, armor, mr, bonusHp,
+    pPhys, pMagic, pTrue, total,
+    armorPen, magicPen, armorShred, magicShred,
+    effArmor, effMR,
+    physTaken, magicTaken, trueTaken,
+    weighted: safeWeighted,
+    ehp: hp / safeWeighted,
+    physicalEhp: hp / Math.max(0.000001, physTaken),
+    magicEhp: hp / Math.max(0.000001, magicTaken),
+    ldrAmp: ldrDamageAmp(bonusHp)
+  };
+}
 
-  const effArmorPlus = effectiveResist(
-    armor + 1,
-    n('flatArmorPenPre'),
-    armorShred,
-    armorPen,
-    n('lethality')
-  );
-  const effMRPlus = effectiveResist(
-    mr + 1,
-    n('flatMagicPenPre'),
-    magicShred,
-    magicPen,
-    n('magicPenFlat')
-  );
+function sumHpPctInputs() {
+  return [
+    'maxHpPhys', 'maxHpMagic', 'maxHpTrue',
+    'curHpPhys', 'curHpMagic', 'curHpTrue',
+    'remainingHpPhys', 'remainingHpMagic', 'remainingHpTrue'
+  ].map(n).reduce((a, b) => a + Math.max(0, b), 0);
+}
 
-  const physTakenPlus = dmgMult(effArmorPlus) * (1 - physExtra) * (1 - exhaust);
-  const magicTakenPlus = dmgMult(effMRPlus) * (1 - magicExtra) * (1 - exhaust);
+function calculate(ev) {
+  ev?.preventDefault();
 
-  const armorGain = hp / Math.max(0.000001, pPhys * physTakenPlus + pMagic * magicTaken + pTrue * trueTaken) - ehp;
-  const mrGain = hp / Math.max(0.000001, pPhys * physTaken + pMagic * magicTakenPlus + pTrue * trueTaken) - ehp;
+  const base = readProfile();
+  const hpGold = Math.max(0.0001, n('hpGold'));
+  const armorGold = Math.max(0.0001, n('armorGold'));
+  const mrGold = Math.max(0.0001, n('mrGold'));
+
+  // +1 HP is treated as +1 item bonus HP too, because the tool compares bought defensive stats.
+  const hpPlus = readProfile({ hp: base.hp + 1, bonusHp: base.bonusHp + 1 });
+  const armorPlus = readProfile({ armor: base.armor + 1 });
+  const mrPlus = readProfile({ mr: base.mr + 1 });
+
+  const hpGain = hpPlus.ehp - base.ehp;
+  const armorGain = armorPlus.ehp - base.ehp;
+  const mrGain = mrPlus.ehp - base.ehp;
 
   const hpRatio = hpGain / hpGold;
   const armorRatio = armorGain / armorGold;
   const mrRatio = mrGain / mrGold;
   const best = [['HP', hpRatio], ['Armor', armorRatio], ['MR', mrRatio]].sort((a, b) => b[1] - a[1]);
 
-  const targetGold = hp * hpGold + Math.max(0, armor) * armorGold + Math.max(0, mr) * mrGold;
-  const effectiveGold = ehp * hpGold;
+  const targetGold = base.hp * hpGold + Math.max(0, base.armor) * armorGold + Math.max(0, base.mr) * mrGold;
+  const effectiveGold = base.ehp * hpGold;
 
-  $('damageTotal').textContent = `Damage total: ${fmt(total, 1)}%`;
-  $('effectiveHealth').textContent = fmt(ehp, 0);
-  $('physicalReduction').textContent = `${fmt((1 - physTaken) * 100, 1)}%`;
-  $('magicReductionOut').textContent = `${fmt((1 - magicTaken) * 100, 1)}%`;
+  $('damageTotal').textContent = `Damage total: ${fmt(base.total, 1)}%`;
+  $('effectiveHealth').textContent = fmt(base.ehp, 0);
+  $('physicalEhp').textContent = fmt(base.physicalEhp, 0);
+  $('magicEhp').textContent = fmt(base.magicEhp, 0);
+  $('physicalReduction').textContent = `${fmt((1 - base.physTaken) * 100, 1)}%`;
+  $('magicReductionOut').textContent = `${fmt((1 - base.magicTaken) * 100, 1)}%`;
   $('statGoldValue').textContent = `${fmt(targetGold, 0)}g`;
   $('effectiveGoldValue').textContent = `${fmt(effectiveGold, 0)}g`;
 
-  $('physTaken').textContent = `${fmt(physTaken * 100, 1)}%`;
-  $('magicTaken').textContent = `${fmt(magicTaken * 100, 1)}%`;
-  $('trueTaken').textContent = `${fmt(trueTaken * 100, 1)}%`;
-  $('physBar').style.width = `${clamp(physTaken * 100, 0, 100)}%`;
-  $('magicBar').style.width = `${clamp(magicTaken * 100, 0, 100)}%`;
-  $('trueBar').style.width = `${clamp(trueTaken * 100, 0, 100)}%`;
+  $('physTaken').textContent = `${fmt(base.physTaken * 100, 1)}%`;
+  $('magicTaken').textContent = `${fmt(base.magicTaken * 100, 1)}%`;
+  $('trueTaken').textContent = `${fmt(base.trueTaken * 100, 1)}%`;
+  $('physBar').style.width = `${clamp(base.physTaken * 100, 0, 100)}%`;
+  $('magicBar').style.width = `${clamp(base.magicTaken * 100, 0, 100)}%`;
+  $('trueBar').style.width = `${clamp(base.trueTaken * 100, 0, 100)}%`;
 
   $('hpRatio').textContent = `${flex(hpRatio)} EHP/g`;
   $('armorRatio').textContent = `${flex(armorRatio)} EHP/g`;
@@ -156,15 +167,16 @@ function calculate(ev) {
   $('conclusionDetail').textContent = `${best[0][0]} domine en EHP/gold marginal. Écart avec le 2e : ${flex(best[0][1] - best[1][1])} EHP/g.`;
 
   $('effectiveResists').innerHTML =
-    `Armor effective : <b>${flex(effArmor, 3)}</b> • ` +
-    `MR effective : <b>${flex(effMR, 3)}</b> • ` +
-    `Armor pen total : <b>${flex(armorPen * 100, 2)}%</b> • ` +
-    `Magic pen total : <b>${flex(magicPen * 100, 2)}%</b> • ` +
-    `Armor scale marginal : <b>${flex((1 - armorShred) * (1 - armorPen), 3)}</b> • ` +
-    `MR scale marginal : <b>${flex((1 - magicShred) * (1 - magicPen), 3)}</b>`;
+    `Armor effective : <b>${flex(base.effArmor, 3)}</b> • ` +
+    `MR effective : <b>${flex(base.effMR, 3)}</b> • ` +
+    `Armor pen total : <b>${flex(base.armorPen * 100, 2)}%</b> • ` +
+    `Magic pen total : <b>${flex(base.magicPen * 100, 2)}%</b> • ` +
+    `Armor scale marginal : <b>${flex((1 - base.armorShred) * (1 - base.armorPen), 3)}</b> • ` +
+    `MR scale marginal : <b>${flex((1 - base.magicShred) * (1 - base.magicPen), 3)}</b> • ` +
+    `LDR physical dmg amp : <b>${flex(base.ldrAmp * 100, 2)}%</b>`;
 
   if (sumHpPctInputs() > 0) {
-    $('conclusionDetail').textContent += ' Attention : des dégâts %HP sont saisis ; la recommandation V0.2 ne remplace pas encore une simulation temporelle complète.';
+    $('conclusionDetail').textContent += ' Attention : des dégâts %HP sont saisis ; la recommandation V0.3 ne remplace pas encore une simulation temporelle complète.';
   }
 }
 
