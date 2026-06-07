@@ -14,7 +14,7 @@
       <h1>Target vs Opponent</h1>
       <p>Calcule les réductions, EHP, ratios EHP/gold et la meilleure stat défensive marginale à acheter.</p>
     </div>
-    <div class="version">V0.4</div>
+    <div class="version">V0.5</div>
   </header>
 
   <section class="layout">
@@ -27,28 +27,28 @@
           </div>
 
           <div class="grid three">
-            <label>Health <span class="info" title="PV de base / PV actuels hors Bonus HP items. V0.4 utilise THP = Health + Bonus HP items pour les calculs d'EHP.">i</span><input id="hp" type="number" value="2000" step="1" min="0"></label>
+            <label>Health <span class="info" title="PV de base / PV actuels hors Bonus HP items. Le site utilise Total HP = Health + Bonus HP items pour l'EHP.">i</span><input id="hp" type="number" value="2000" step="1" min="0"></label>
             <label>Armor <span class="info" title="Armure brute de la cible avant réductions, pénétrations et létalité.">i</span><input id="armor" type="number" value="300" step="1"></label>
             <label>Magic Resist <span class="info" title="Résistance magique brute de la cible avant réductions et pénétrations magiques.">i</span><input id="mr" type="number" value="20" step="1"></label>
 
-            <label>Level <span class="info" title="Prévu pour les runes/items scalant au niveau. V0.4 : affichage uniquement.">i</span><input id="level" type="number" value="18" step="1" min="1" max="18"></label>
-            <label>Bonus HP items <span class="info" title="PV bonus venant des items. Inclus dans THP et utilisé par LDR : +1% de dégâts physiques par 100 HP bonus, max +15%.">i</span><input id="bonusHp" type="number" value="0" step="1" min="0"></label>
+            <label>Level <span class="info" title="Prévu pour les runes/items scalant au niveau. V0.5 : affichage uniquement.">i</span><input id="level" type="number" value="18" step="1" min="1" max="18"></label>
+            <label>Bonus HP items <span class="info" title="PV bonus venant des items. Sert aussi au bonus de dégâts physiques LDR.">i</span><input id="bonusHp" type="number" value="0" step="1" min="0"></label>
             <label>HP gold value <span class="info" title="Valeur en gold de 1 HP. Par défaut : 400g / 150 HP = 2,6666667.">i</span><input id="hpGold" type="number" value="2.6666667" step="0.0001" min="0.0001"></label>
 
             <label>Armor gold value <span class="info" title="Valeur en gold de 1 armure. Sert au ratio marginal EHP/gold.">i</span><input id="armorGold" type="number" value="20" step="0.01" min="0.0001"></label>
             <label>MR gold value <span class="info" title="Valeur en gold de 1 MR. Sert au ratio marginal EHP/gold.">i</span><input id="mrGold" type="number" value="20" step="0.01" min="0.0001"></label>
-            <label>Physical dmg reduction % <span class="info" title="Réduction de dégâts physiques reçus venant d'un sort, d'un buff ou d'un effet défensif. Appliquée après les résistances.">i</span><input id="physReduction" type="number" value="0" step="1" min="0" max="100"></label>
+            <label>Physical dmg reduction % <span class="info" title="Réduction de dégâts physiques reçus venant d'un sort, d'un buff ou d'un effet défensif. Dans ce modèle, appliquée avant les résistances.">i</span><input id="physReduction" type="number" value="0" step="1" min="0" max="100"></label>
 
-            <label>Magic dmg reduction % <span class="info" title="Réduction de dégâts magiques reçus venant d'un sort, d'un buff ou d'un effet défensif. Appliquée après les résistances.">i</span><input id="magicReduction" type="number" value="0" step="1" min="0" max="100"></label>
+            <label>Magic dmg reduction % <span class="info" title="Réduction de dégâts magiques reçus venant d'un sort, d'un buff ou d'un effet défensif. Dans ce modèle, appliquée avant les résistances.">i</span><input id="magicReduction" type="number" value="0" step="1" min="0" max="100"></label>
             <label class="toggle-row"><input id="exhausted" type="checkbox"> Ennemi exhausted ? <span class="info" title="Si coché, applique la réduction Exhaust aux dégâts physiques et magiques. Le brut reste non réduit.">i</span></label>
             <label>Exhaust reduction % <span class="info" title="Réduction appliquée si Ennemi exhausted est coché. Par défaut : 35%.">i</span><input id="exhaustReduction" type="number" value="35" step="1" min="0" max="100"></label>
           </div>
         </div>
 
         <aside class="side-card formulae mini-card">
-          <span>Effective resistances <span class="info" title="Résistances vues par l'Opponent après l'ordre de calcul V0.4.">i</span></span>
+          <span>Effective resistances <span class="info" title="Résistances vues par l'Opponent après shred, pénétrations % et pénétrations plates.">i</span></span>
           <p id="effectiveResists">—</p>
-          <p class="note">Inclut <b>Total HP = Health + Bonus HP items</b>. Ordre V0.4 : flat pen/reduction pré-% → shred % → pen % multiplicative → lethality / magic pen post-%.</p>
+          <p class="note">Affiche les résistances finales et les coefficients marginaux de résistance. Les détails d'ordre offensif sont dans Effective dmg augmentation.</p>
         </aside>
       </div>
 
@@ -64,7 +64,11 @@
             <label>Magic damage % <span class="info" title="Part des dégâts magiques dans le profil de dégâts.">i</span><input id="magicShare" type="number" value="0" step="1" min="0"></label>
             <label>True damage % <span class="info" title="Part des dégâts bruts. Non réduits par résistances, Exhaust ou réductions de dégâts dans ce modèle.">i</span><input id="trueShare" type="number" value="0" step="1" min="0"></label>
 
-            <label>Flat armor pen <span class="info" title="Réduction / pénétration d'armure plate pré-%. Exemple possible : effet plat spécifique type Corki, si on l'assimile à une réduction plate appliquée avant les %pen.">i</span><input id="flatArmorPenPre" type="number" value="0" step="1" min="0"></label>
+            <label>AD/physical raw dmg <span class="info" title="Dégâts physiques bruts avant bonus LDR, réductions et armure. Sert à afficher le total AD/physical.">i</span><input id="physRawDmg" type="number" value="1000" step="1" min="0"></label>
+            <label>AP/magic raw dmg <span class="info" title="Dégâts magiques bruts avant réductions et MR. Sert à afficher le total AP/magic.">i</span><input id="magicRawDmg" type="number" value="0" step="1" min="0"></label>
+            <label>True raw dmg <span class="info" title="Dégâts bruts fixes indicatifs. Les dégâts bruts ne sont pas réduits dans ce modèle.">i</span><input id="trueRawDmg" type="number" value="0" step="1" min="0"></label>
+
+            <label>Flat armor pen <span class="info" title="Réduction / pénétration d'armure plate pré-%. Exemple possible : effet plat spécifique si on l'assimile à une réduction plate appliquée avant les %pen.">i</span><input id="flatArmorPenPre" type="number" value="0" step="1" min="0"></label>
             <label>Lethality <span class="info" title="Pénétration d'armure plate appliquée après la pénétration %.">i</span><input id="lethality" type="number" value="64" step="1" min="0"></label>
             <label>Armor pen % <span class="info" title="Pénétration d'armure % générale. Défaut 0 car LDR % et bonus % ont leurs champs dédiés.">i</span><input id="armorPenPct" type="number" value="0" step="1" min="0" max="100"></label>
 
@@ -85,28 +89,26 @@
         </div>
 
         <aside class="side-card formulae mini-card">
-          <span>Effective dmg augmentation <span class="info" title="Multiplicateurs de dégâts effectifs de l'Opponent avant l'effet des résistances finales.">i</span></span>
+          <span>Effective dmg augmentation <span class="info" title="Multiplicateurs de dégâts effectifs de l'Opponent avant / après mitigation selon le modèle.">i</span></span>
           <p id="effectiveDamageAmp">—</p>
-          <p class="note">LDR acheté ajoute un bonus de dégâts physiques basé sur les HP bonus de la Target. Exhaust et les réductions défensives diminuent les dégâts physiques/magiques.</p>
+          <p class="note">Ordre offensif V0.5 : flat pen/reduction pré-% → shred % → pen % multiplicative → lethality / magic pen post-%. Ordre défensif simplifié : Bone Plating → Exhaust → % réduction dégâts → résistances → shield. Les shields ne sont pas encore modélisés.</p>
         </aside>
       </div>
 
       <details class="advanced">
-        <summary>Inputs %HP — V0.4 expérimental</summary>
+        <summary>Inputs %HP — V0.5 expérimental</summary>
         <div class="grid three advanced-grid">
-          <label>% HP max physique <span class="info" title="Dégâts physiques égaux à un % des PV max de la cible. V0.4 : signalé dans la conclusion, pas encore simulé comme rotation complète.">i</span><input id="maxHpPhys" type="number" value="0" step="0.1" min="0"></label>
+          <label>% HP max physique <span class="info" title="Dégâts physiques égaux à un % des PV max de la cible. V0.5 : signalé dans la conclusion, pas encore simulé comme rotation complète.">i</span><input id="maxHpPhys" type="number" value="0" step="0.1" min="0"></label>
           <label>% HP max magique <span class="info" title="Dégâts magiques égaux à un % des PV max de la cible.">i</span><input id="maxHpMagic" type="number" value="0" step="0.1" min="0"></label>
           <label>% HP max brut <span class="info" title="Dégâts bruts égaux à un % des PV max de la cible.">i</span><input id="maxHpTrue" type="number" value="0" step="0.1" min="0"></label>
-
           <label>% HP actuel physique <span class="info" title="Dégâts physiques égaux à un % des PV actuels de la cible.">i</span><input id="curHpPhys" type="number" value="0" step="0.1" min="0"></label>
           <label>% HP actuel magique <span class="info" title="Dégâts magiques égaux à un % des PV actuels de la cible.">i</span><input id="curHpMagic" type="number" value="0" step="0.1" min="0"></label>
           <label>% HP actuel brut <span class="info" title="Dégâts bruts égaux à un % des PV actuels de la cible.">i</span><input id="curHpTrue" type="number" value="0" step="0.1" min="0"></label>
-
           <label>% HP restant physique <span class="info" title="Dégâts physiques égaux à un % des PV restants de la cible.">i</span><input id="remainingHpPhys" type="number" value="0" step="0.1" min="0"></label>
           <label>% HP restant magique <span class="info" title="Dégâts magiques égaux à un % des PV restants de la cible.">i</span><input id="remainingHpMagic" type="number" value="0" step="0.1" min="0"></label>
           <label>% HP restant brut <span class="info" title="Dégâts bruts égaux à un % des PV restants de la cible.">i</span><input id="remainingHpTrue" type="number" value="0" step="0.1" min="0"></label>
         </div>
-        <p class="note">Ces champs sont inclus pour préparer la simulation des dégâts %HP. V0.4 les détecte et affiche un avertissement ; la recommandation principale reste marginale HP / Armor / MR.</p>
+        <p class="note">Ces champs sont inclus pour préparer la simulation des dégâts %HP. V0.5 les détecte et affiche un avertissement ; la recommandation principale reste marginale HP / Armor / MR.</p>
       </details>
 
       <button type="submit">Calculate defenses</button><span id="damageTotal" class="damage-total">Damage total: 100%</span>
@@ -123,7 +125,7 @@
           <div><b id="magicEhp">—</b><small>Magic EHP</small></div>
         </div>
       </div>
-      <div class="cards two"><div class="card"><span>Physical reduction <span class="info" title="Réduction totale contre dégâts physiques après résistance effective et réductions externes. Inclut le bonus de dégâts LDR comme réduction négative effective.">i</span></span><strong id="physicalReduction">—</strong></div><div class="card"><span>Magic reduction <span class="info" title="Réduction totale contre dégâts magiques après résistance effective et réductions externes.">i</span></span><strong id="magicReductionOut">—</strong></div></div>
+      <div class="cards two"><div class="card"><span>Physical net modifier <span class="info" title="Réduction ou amplification nette contre dégâts physiques. Une valeur négative veut dire que les dégâts physiques reçus augmentent.">i</span></span><strong id="physicalReduction">—</strong></div><div class="card"><span>Magic net modifier <span class="info" title="Réduction ou amplification nette contre dégâts magiques.">i</span></span><strong id="magicReductionOut">—</strong></div></div>
       <div class="cards two"><div class="card"><span>Target stat gold value <span class="info" title="Valeur-or approximative des stats défensives saisies : Total HP, armor, MR.">i</span></span><strong id="statGoldValue">—</strong></div><div class="card"><span>Effective value <span class="info" title="EHP converti en gold via la valeur-or du HP. Indicateur heuristique, pas une valeur Riot officielle.">i</span></span><strong id="effectiveGoldValue">—</strong></div></div>
       <div class="card bars"><span>Damage taken after mitigation <span class="info" title="Pourcentage de dégâts reçus après toutes les mitigations du modèle.">i</span></span><div class="bar-row"><label>Physical</label><div><i id="physBar"></i></div><b id="physTaken">—</b></div><div class="bar-row"><label>Magical</label><div><i id="magicBar"></i></div><b id="magicTaken">—</b></div><div class="bar-row"><label>True</label><div><i id="trueBar"></i></div><b id="trueTaken">—</b></div></div>
       <div class="card comparison"><span>Marginal EHP / gold <span class="info" title="Gain d'EHP par gold si on ajoute exactement +1 HP, +1 armor ou +1 MR. Le +1 HP augmente aussi les HP bonus items pour le calcul LDR.">i</span></span><div class="stat-line"><b>+1 HP</b><strong id="hpRatio">—</strong><small id="hpGain">—</small></div><div class="stat-line"><b>+1 Armor</b><strong id="armorRatio">—</strong><small id="armorGain">—</small></div><div class="stat-line"><b>+1 MR</b><strong id="mrRatio">—</strong><small id="mrGain">—</small></div></div>
