@@ -41,10 +41,11 @@ function ldrDamageAmp(bonusHp) {
 }
 
 function readProfile(overrides = {}) {
-  const hp = Math.max(1, overrides.hp ?? n('hp'));
+  const baseHp = Math.max(0, overrides.hp ?? n('hp'));
+  const bonusHp = Math.max(0, overrides.bonusHp ?? n('bonusHp'));
+  const totalHp = Math.max(1, baseHp + bonusHp);
   const armor = overrides.armor ?? n('armor');
   const mr = overrides.mr ?? n('mr');
-  const bonusHp = Math.max(0, overrides.bonusHp ?? n('bonusHp'));
 
   const physShare = Math.max(0, n('physShare'));
   const magicShare = Math.max(0, n('magicShare'));
@@ -85,25 +86,31 @@ function readProfile(overrides = {}) {
   const exhaust = $('exhausted')?.checked ? pct('exhaustReduction') : 0;
   const physExtra = pct('physReduction');
   const magicExtra = pct('magicReduction');
+  const ldrAmp = ldrDamageAmp(bonusHp);
 
-  const physTaken = dmgMult(effArmor) * (1 - physExtra) * (1 - exhaust) * ldrDamageAmp(bonusHp);
-  const magicTaken = dmgMult(effMR) * (1 - magicExtra) * (1 - exhaust);
+  const physicalDefensiveMult = (1 - physExtra) * (1 - exhaust);
+  const magicDefensiveMult = (1 - magicExtra) * (1 - exhaust);
+  const physTaken = dmgMult(effArmor) * physicalDefensiveMult * ldrAmp;
+  const magicTaken = dmgMult(effMR) * magicDefensiveMult;
   const trueTaken = 1;
 
   const weighted = pPhys * physTaken + pMagic * magicTaken + pTrue * trueTaken;
   const safeWeighted = Math.max(0.000001, weighted);
 
   return {
-    hp, armor, mr, bonusHp,
+    hp: baseHp, totalHp, armor, mr, bonusHp,
     pPhys, pMagic, pTrue, total,
     armorPen, magicPen, armorShred, magicShred,
     effArmor, effMR,
     physTaken, magicTaken, trueTaken,
     weighted: safeWeighted,
-    ehp: hp / safeWeighted,
-    physicalEhp: hp / Math.max(0.000001, physTaken),
-    magicEhp: hp / Math.max(0.000001, magicTaken),
-    ldrAmp: ldrDamageAmp(bonusHp)
+    ehp: totalHp / safeWeighted,
+    physicalEhp: totalHp / Math.max(0.000001, physTaken),
+    magicEhp: totalHp / Math.max(0.000001, magicTaken),
+    trueEhp: totalHp,
+    ldrAmp,
+    physicalDefensiveMult,
+    magicDefensiveMult
   };
 }
 
@@ -124,7 +131,7 @@ function calculate(ev) {
   const mrGold = Math.max(0.0001, n('mrGold'));
 
   // +1 HP is treated as +1 item bonus HP too, because the tool compares bought defensive stats.
-  const hpPlus = readProfile({ hp: base.hp + 1, bonusHp: base.bonusHp + 1 });
+  const hpPlus = readProfile({ hp: base.hp, bonusHp: base.bonusHp + 1 });
   const armorPlus = readProfile({ armor: base.armor + 1 });
   const mrPlus = readProfile({ mr: base.mr + 1 });
 
@@ -137,11 +144,12 @@ function calculate(ev) {
   const mrRatio = mrGain / mrGold;
   const best = [['HP', hpRatio], ['Armor', armorRatio], ['MR', mrRatio]].sort((a, b) => b[1] - a[1]);
 
-  const targetGold = base.hp * hpGold + Math.max(0, base.armor) * armorGold + Math.max(0, base.mr) * mrGold;
+  const targetGold = base.totalHp * hpGold + Math.max(0, base.armor) * armorGold + Math.max(0, base.mr) * mrGold;
   const effectiveGold = base.ehp * hpGold;
 
   $('damageTotal').textContent = `Damage total: ${fmt(base.total, 1)}%`;
   $('effectiveHealth').textContent = fmt(base.ehp, 0);
+  $('totalHpOut').textContent = fmt(base.totalHp, 0);
   $('physicalEhp').textContent = fmt(base.physicalEhp, 0);
   $('magicEhp').textContent = fmt(base.magicEhp, 0);
   $('physicalReduction').textContent = `${fmt((1 - base.physTaken) * 100, 1)}%`;
@@ -167,16 +175,26 @@ function calculate(ev) {
   $('conclusionDetail').textContent = `${best[0][0]} domine en EHP/gold marginal. Écart avec le 2e : ${flex(best[0][1] - best[1][1])} EHP/g.`;
 
   $('effectiveResists').innerHTML =
+    `Total HP : <b>${flex(base.totalHp, 0)}</b> • ` +
+    `Base HP : <b>${flex(base.hp, 0)}</b> • ` +
+    `Bonus HP items : <b>${flex(base.bonusHp, 0)}</b><br>` +
     `Armor effective : <b>${flex(base.effArmor, 3)}</b> • ` +
-    `MR effective : <b>${flex(base.effMR, 3)}</b> • ` +
+    `MR effective : <b>${flex(base.effMR, 3)}</b><br>` +
     `Armor pen total : <b>${flex(base.armorPen * 100, 2)}%</b> • ` +
-    `Magic pen total : <b>${flex(base.magicPen * 100, 2)}%</b> • ` +
+    `Magic pen total : <b>${flex(base.magicPen * 100, 2)}%</b><br>` +
     `Armor scale marginal : <b>${flex((1 - base.armorShred) * (1 - base.armorPen), 3)}</b> • ` +
-    `MR scale marginal : <b>${flex((1 - base.magicShred) * (1 - base.magicPen), 3)}</b> • ` +
-    `LDR physical dmg amp : <b>${flex(base.ldrAmp * 100, 2)}%</b>`;
+    `MR scale marginal : <b>${flex((1 - base.magicShred) * (1 - base.magicPen), 3)}</b>`;
+
+  $('effectiveDamageAmp').innerHTML =
+    `Physical dmg amp : <b>${flex(base.ldrAmp * 100, 2)}%</b> • ` +
+    `LDR bonus : <b>${flex((base.ldrAmp - 1) * 100, 2)}%</b><br>` +
+    `Physical defensive mult : <b>${flex(base.physicalDefensiveMult * 100, 2)}%</b> • ` +
+    `Magic defensive mult : <b>${flex(base.magicDefensiveMult * 100, 2)}%</b><br>` +
+    `Final physical taken : <b>${flex(base.physTaken * 100, 2)}%</b> • ` +
+    `Final magic taken : <b>${flex(base.magicTaken * 100, 2)}%</b>`;
 
   if (sumHpPctInputs() > 0) {
-    $('conclusionDetail').textContent += ' Attention : des dégâts %HP sont saisis ; la recommandation V0.3 ne remplace pas encore une simulation temporelle complète.';
+    $('conclusionDetail').textContent += ' Attention : des dégâts %HP sont saisis ; la recommandation V0.4 ne remplace pas encore une simulation temporelle complète.';
   }
 }
 
